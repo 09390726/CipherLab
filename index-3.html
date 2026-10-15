@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Interactive Caesar, polyalphabetic and Vigenère ciphers, frequency analysis, and models of symmetric and asymmetric (RSA) encryption. VCE Applied Computing Unit 2.">
+<style>html{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Cipher Lab</title>
+<style>
+/* Layout: one column of numbered stations that build on each other (classic ciphers,
+   breaking them, then symmetric and asymmetric keys). Sticky jump bar at the top.
+   Key colour code used throughout: purple = secret/private key, amber = public key, coral = attacker. */
+:root {
+  --bg: #F4F6FA; --surface: #FFFFFF; --sunken: #EBEFF6; --ink: #16233F; --muted: #55607A; --line: #D3DAE6;
+  --navy: #1B2B4B; --on-navy: #FFFFFF; --teal: #0F7C7C; --on-teal: #FFFFFF; --teal-soft: #DDF1EF;
+  --amber: #F5A623; --on-amber: #16233F; --amber-soft: #FFF3D9; --coral: #C9472F; --on-coral: #FFFFFF; --coral-soft: #FCE7E2;
+  --purple: #6A4BA3; --on-purple: #FFFFFF; --purple-soft: #EEE8F8;
+  --body: Arial, "Helvetica Neue", Helvetica, sans-serif; --mono: "Courier New", Courier, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E1524; --surface: #172138; --sunken: #111A2D; --ink: #E7ECF6; --muted: #A2ADC4; --line: #2C3A59;
+    --navy: #2A3F73; --on-navy: #FFFFFF; --teal: #56C7C2; --on-teal: #0E1524; --teal-soft: #123638;
+    --amber: #F5B041; --on-amber: #16233F; --amber-soft: #382C10; --coral: #F0816F; --on-coral: #0E1524; --coral-soft: #3F201B;
+    --purple: #B7A0E6; --on-purple: #0E1524; --purple-soft: #2A2245; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E1524; --surface: #172138; --sunken: #111A2D; --ink: #E7ECF6; --muted: #A2ADC4; --line: #2C3A59;
+  --navy: #2A3F73; --on-navy: #FFFFFF; --teal: #56C7C2; --on-teal: #0E1524; --teal-soft: #123638;
+  --amber: #F5B041; --on-amber: #16233F; --amber-soft: #382C10; --coral: #F0816F; --on-coral: #0E1524; --coral-soft: #3F201B;
+  --purple: #B7A0E6; --on-purple: #0E1524; --purple-soft: #2A2245; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 16px; line-height: 1.55; }
+.wrap { max-width: 900px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: flex; flex-direction: column; gap: 36px; }
+:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+p { margin: 0; }
+
+.eyebrow { font-size: 12px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--teal); font-weight: 700; }
+h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.05; margin: 6px 0 12px; letter-spacing: -0.01em; }
+h1 .scramble { font-family: var(--mono); color: var(--teal); }
+.lede { max-width: 64ch; color: var(--muted); }
+
+.jump { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line); padding-block: 10px; margin-top: -16px; }
+.jump ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: thin; }
+.jump a { display: block; white-space: nowrap; font-size: 13px; font-weight: 700; color: var(--ink); text-decoration: none; padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.jump a:hover { border-color: var(--teal); color: var(--teal); }
+.jump a b { color: var(--teal); margin-right: 4px; font-variant-numeric: tabular-nums; }
+
+section.station { display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 70px; }
+.sec-head { display: flex; align-items: stretch; }
+.sec-badge { background: var(--amber); color: var(--on-amber); font: 700 13px/1 var(--body); padding: 0 12px; display: flex; align-items: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sec-title { flex: 1; min-width: 0; margin: 0; background: var(--navy); color: var(--on-navy); font-size: 18px; line-height: 1.25; padding: 10px 14px; text-wrap: balance; }
+.sec-title small { font-weight: 400; opacity: 0.75; font-size: 13px; margin-left: 6px; }
+.intro { max-width: 68ch; }
+.intro + .intro { margin-top: -4px; }
+.term { font-weight: 700; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.label { font-size: 11px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: end; }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; flex: 1 1 200px; }
+.field.narrow { flex: 0 1 150px; }
+.field > span { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+input[type=text], select, textarea { font: 700 17px/1.3 var(--mono); letter-spacing: 0.06em; padding: 9px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); width: 100%; min-width: 0; text-transform: uppercase; }
+textarea { font-weight: 400; font-size: 15px; letter-spacing: 0; text-transform: none; resize: vertical; min-height: 110px; line-height: 1.5; }
+select { text-transform: none; letter-spacing: 0; }
+input[type=range] { width: 100%; accent-color: var(--teal); }
+.range-row { display: flex; align-items: center; gap: 10px; }
+.range-row output { font: 700 22px/1 var(--mono); min-width: 2.2ch; text-align: right; color: var(--teal); }
+.btn { font: 700 14px/1 var(--body); padding: 10px 14px; border-radius: 4px; border: 1px solid var(--navy); background: var(--navy); color: var(--on-navy); cursor: pointer; white-space: nowrap; }
+.btn:hover { filter: brightness(1.12); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.ghost:hover { border-color: var(--ink); }
+.btn.danger { background: var(--coral); border-color: var(--coral); color: var(--on-coral); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg button { font: 700 13px/1 var(--body); padding: 10px 12px; border: 0; background: var(--surface); color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--teal); color: var(--on-teal); }
+
+.result { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 4px; background: var(--teal-soft); }
+.result .out { font: 700 clamp(18px, 3.4vw, 24px)/1.3 var(--mono); letter-spacing: 0.12em; word-break: break-all; }
+.note { background: var(--amber-soft); border-radius: 4px; padding: 10px 12px; font-size: 14px; max-width: 74ch; }
+.note b:first-child { display: block; font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 3px; }
+
+/* Alphabet strip */
+.strip-wrap { overflow-x: auto; }
+.strip { display: grid; grid-template-columns: 74px repeat(26, minmax(24px, 1fr)); gap: 2px; min-width: 690px; font: 700 15px/1 var(--mono); }
+.strip > div { padding: 7px 0; text-align: center; background: var(--sunken); border-radius: 2px; }
+.strip > .rl { text-align: left; font: 700 11px/1.2 var(--body); letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); background: transparent; padding: 7px 4px 7px 0; }
+.strip > .used { background: var(--teal); color: var(--on-teal); }
+.strip > .arrow { background: transparent; color: var(--muted); padding: 0; font-size: 12px; }
+
+/* Step tables */
+.tbl { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 14px; }
+.steps th, .steps td { border: 1px solid var(--line); padding: 6px 8px; text-align: center; min-width: 34px; }
+.steps td { font: 700 16px var(--mono); }
+.steps tbody th { text-align: left; font-size: 12px; white-space: nowrap; background: var(--sunken); font-weight: 700; }
+.steps tr.k td { color: var(--purple); }
+.steps tr.n td { color: var(--muted); font-weight: 400; font-size: 14px; }
+.steps tr.o td { background: var(--teal-soft); }
+.steps td.click { cursor: pointer; }
+.steps.vert { width: 100%; }
+.steps.vert thead th { background: var(--sunken); font-size: 12px; font-weight: 700; padding: 6px 4px; white-space: nowrap; }
+.steps.vert td { min-width: 0; padding: 4px 6px; }
+.steps.vert td.n { color: var(--muted); font-weight: 400; font-size: 14px; }
+.steps.vert td.o { background: var(--teal-soft); }
+.steps td.sel { outline: 2px solid var(--amber); outline-offset: -2px; }
+
+/* Vigenère square */
+.square-wrap { overflow-x: auto; }
+.square { border-collapse: collapse; font: 12px/1 var(--mono); }
+.square td, .square th { width: 22px; height: 22px; text-align: center; border: 1px solid var(--line); padding: 0; }
+.square th { background: var(--sunken); font-weight: 700; }
+.square .hr { background: var(--purple-soft); }
+.square .hc { background: var(--teal-soft); }
+.square .hit { background: var(--amber); color: var(--on-amber); font-weight: 700; }
+details.more > summary { cursor: pointer; font-weight: 700; color: var(--teal); font-size: 14px; }
+details.more[open] > summary { margin-bottom: 10px; }
+
+/* Brute force list */
+.brute { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 4px 12px; font: 14px/1.4 var(--mono); }
+.brute li { display: flex; gap: 10px; padding: 4px 8px; border-radius: 3px; min-width: 0; }
+.brute li span:first-child { color: var(--muted); min-width: 2.4ch; text-align: right; font-variant-numeric: tabular-nums; }
+.brute li span:last-child { overflow-wrap: anywhere; }
+.brute li.best { background: var(--amber); color: var(--on-amber); font-weight: 700; }
+.brute li.best span:first-child { color: var(--on-amber); }
+
+/* Challenge */
+.challenge { border: 1px dashed var(--teal); border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.challenge .ct { font: 700 20px var(--mono); letter-spacing: 0.12em; }
+.challenge .row { display: flex; flex-wrap: wrap; gap: 8px; }
+.challenge .row input { flex: 1 1 200px; }
+.fb { font-size: 14px; font-weight: 700; }
+.fb.ok { color: var(--teal); } .fb.no { color: var(--coral); }
+
+/* Frequency charts */
+.freq-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.chart { min-width: 0; border: 1px solid var(--line); border-radius: 4px; padding: 12px; background: var(--surface); }
+.chart-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; margin-bottom: 8px; }
+.chart-head h3 { margin: 0; font-size: 15px; }
+.chart-head p { font-size: 13px; color: var(--muted); }
+.chart-scroll { overflow-x: auto; }
+.bars { display: grid; grid-template-columns: repeat(26, minmax(16px, 1fr)); gap: 3px; height: 110px; align-items: end; min-width: 520px; border-bottom: 1px solid var(--muted); background-image: linear-gradient(var(--line) 1px, transparent 1px); background-size: 100% 25%; }
+.bars span { background: var(--teal); border-radius: 2px 2px 0 0; min-height: 1px; }
+.bars span.top { background: var(--amber); }
+.bars.plain span { background: var(--muted); }
+.bars.plain span.top { background: var(--amber); }
+.letters { display: grid; grid-template-columns: repeat(26, minmax(16px, 1fr)); gap: 3px; min-width: 520px; font: 700 11px/1.8 var(--mono); text-align: center; color: var(--muted); }
+.chart .verdict { margin-top: 8px; font-size: 14px; }
+
+/* Flow diagrams: Alice / internet / Bob */
+.flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: stretch; }
+.party { border: 1px solid var(--line); border-radius: 6px; padding: 14px; background: var(--surface); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.party .field { flex: none; }
+.party h3 { margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+.party .who { font-size: 12px; color: var(--muted); font-weight: 400; }
+.party.net { background: repeating-linear-gradient(135deg, var(--sunken) 0 10px, var(--surface) 10px 20px); }
+.party.eve { border-color: var(--coral); }
+.av { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font: 700 13px var(--body); flex: none; }
+.av.a { background: var(--teal); color: var(--on-teal); }
+.av.b { background: var(--navy); color: var(--on-navy); }
+.av.e { background: var(--coral); color: var(--on-coral); }
+.mono { font: 700 16px/1.4 var(--mono); letter-spacing: 0.08em; word-break: break-all; }
+.wire { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px; }
+.key { display: inline-flex; align-items: center; gap: 6px; font: 700 13px/1 var(--body); border-radius: 3px; padding: 6px 8px; }
+.key.secret { background: var(--purple-soft); color: var(--purple); }
+.key.public { background: var(--amber-soft); color: var(--ink); }
+.key.public::before, .key.secret::before { content: ""; width: 10px; height: 10px; border-radius: 50%; border: 3px solid currentColor; box-sizing: border-box; }
+.key.public::before { border-color: var(--amber); }
+.status { display: inline-block; font: 700 13px/1 var(--body); padding: 6px 8px; border-radius: 3px; }
+.status.ok { background: var(--teal-soft); color: var(--teal); }
+.status.bad { background: var(--coral-soft); color: var(--coral); }
+.arrowline { font: 700 13px var(--body); color: var(--muted); }
+
+.keys2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.keycard { border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.keycard.public { background: var(--amber-soft); border: 1px solid var(--amber); }
+.keycard.private { background: var(--purple-soft); border: 1px solid var(--purple); }
+.keycard .big { font: 700 22px var(--mono); }
+.maths { font: 15px/1.7 var(--mono); background: var(--sunken); border-radius: 4px; padding: 10px 12px; overflow-x: auto; white-space: nowrap; }
+.maths b { color: var(--teal); }
+.steplist { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 4px; max-width: 70ch; }
+.steplist li::marker { color: var(--teal); font-weight: 700; }
+
+.cmp th, .cmp td { border: 1px solid var(--line); padding: 9px 11px; text-align: left; vertical-align: top; }
+.cmp thead th { background: var(--navy); color: var(--on-navy); border-color: var(--navy); }
+.cmp tbody th { background: var(--sunken); width: 22%; }
+.cmp { width: 100%; font-size: 15px; }
+
+/* Quiz */
+.quiz { display: flex; flex-direction: column; gap: 12px; }
+.qq { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.qq p.qt { font-weight: 700; }
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+@media (max-width: 560px) { .opts { grid-template-columns: minmax(0, 1fr); } }
+.opts button { text-align: left; font: 15px/1.35 var(--body); padding: 10px 12px; border-radius: 4px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.opts button:hover:not(:disabled) { border-color: var(--ink); }
+.opts button:disabled { cursor: default; }
+.opts button.right { background: var(--teal); border-color: var(--teal); color: var(--on-teal); font-weight: 700; }
+.opts button.wrong { background: var(--coral-soft); border-color: var(--coral); }
+.qq .why { font-size: 14px; color: var(--muted); }
+.score { font-size: 15px; font-variant-numeric: tabular-nums; }
+.score b { font-size: 22px; }
+
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+footer p { max-width: 72ch; }
+
+@media (max-width: 720px) {
+  .flow { grid-template-columns: 1fr; }
+  .panel { padding: 13px; }
+}
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">VCE Applied Computing · Chapter 7 · Cryptographic techniques</p>
+    <h1>Cipher Lab <span class="scramble" id="h1-scramble" aria-hidden="true">FLSKHU ODE</span></h1>
+    <p class="lede">Work through the stations in order. You start with ciphers people have used for 2,000 years, break them, then see how modern computers keep data secret with symmetric and asymmetric keys. Change any box and the page updates as you type.</p>
+  </header>
+
+  <nav class="jump" aria-label="Stations">
+    <ol>
+      <li><a href="#caesar"><b>1</b>Caesar</a></li>
+      <li><a href="#poly"><b>2</b>Polyalphabetic</a></li>
+      <li><a href="#vigenere"><b>3</b>Vigenère</a></li>
+      <li><a href="#frequency"><b>4</b>Breaking ciphers</a></li>
+      <li><a href="#symmetric"><b>5</b>Symmetric</a></li>
+      <li><a href="#asymmetric"><b>6</b>Asymmetric</a></li>
+      <li><a href="#compare"><b>7</b>Compare</a></li>
+      <li><a href="#quiz"><b>8</b>Check yourself</a></li>
+    </ol>
+  </nav>
+
+  <!-- ===== 1 Caesar ===== -->
+  <section class="station" id="caesar">
+    <div class="sec-head"><span class="sec-badge">1</span><h2 class="sec-title">Caesar cipher <small>pp. 283–284</small></h2></div>
+    <p class="intro">A <span class="term">Caesar cipher</span> is a substitution cipher: every letter moves the same number of places along the alphabet. That number is the key. After Z, the count loops back to A.</p>
+    <div class="panel">
+      <div class="controls">
+        <label class="field"><span>Message</span><input type="text" id="c-text" value="HELLO" maxlength="60" autocomplete="off" spellcheck="false"></label>
+        <div class="field narrow"><span>Shift (the key)</span><div class="range-row"><input type="range" id="c-shift" min="0" max="25" value="3" aria-label="Shift"><output id="c-shift-out">3</output></div></div>
+        <div class="seg" role="group" aria-label="Direction"><button type="button" id="c-enc" aria-pressed="true">Encrypt</button><button type="button" id="c-dec" aria-pressed="false">Decrypt</button></div>
+        <button class="btn ghost" type="button" id="c-rot13">ROT13</button>
+      </div>
+      <div class="strip-wrap"><div class="strip" id="c-strip"></div></div>
+      <div class="result"><span class="label" id="c-out-label">Cipher text</span><span class="out" id="c-out"></span></div>
+      <p class="note"><b>ROT13</b>A shift of 13 is half the alphabet, so encrypting twice gets you back where you started. Try it: press ROT13 with HELLO and you get URYYB, as in Figure 7.21.</p>
+    </div>
+
+    <div class="panel">
+      <p class="label">Crack it by brute force</p>
+      <p class="intro">There are only 25 useful shifts, so an attacker can just try every one. Paste any Caesar cipher text here. The highlighted row is the one whose letters look most like English.</p>
+      <label class="field"><span>Intercepted cipher text</span><input type="text" id="b-text" value="WKLV LV D VHFUHW" maxlength="60" autocomplete="off" spellcheck="false"></label>
+      <ul class="brute" id="b-list"></ul>
+      <p class="note"><b>Why this matters</b>A brute-force attack tries every possible key. A person would get through 25 keys in a few minutes. A computer does it in a fraction of a millisecond, which is why a Caesar cipher gives no real protection.</p>
+    </div>
+
+    <div class="challenge" id="ch1">
+      <p class="label">Challenge</p>
+      <p>You intercept this message between two hackers. What does it say?</p>
+      <p class="ct">TLLA HA UVVU</p>
+      <div class="row"><input type="text" id="ch1-in" aria-label="Your answer" autocomplete="off" spellcheck="false"><button class="btn" type="button" id="ch1-go">Check</button></div>
+      <p class="fb" id="ch1-fb" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <!-- ===== 2 Polyalphabetic ===== -->
+  <section class="station" id="poly">
+    <div class="sec-head"><span class="sec-badge">2</span><h2 class="sec-title">Polyalphabetic cipher <small>pp. 284–285</small></h2></div>
+    <p class="intro">A <span class="term">polyalphabetic cipher</span> uses several shifts instead of one. The key is a sequence, such as 3-1-4: shift the first letter 3, the second 1, the third 4, then start the sequence again. "Poly" means many, so it uses many alphabets.</p>
+    <div class="panel">
+      <div class="controls">
+        <label class="field"><span>Message</span><input type="text" id="p-text" value="POLYALPHABETIC" maxlength="30" autocomplete="off" spellcheck="false"></label>
+        <label class="field narrow"><span>Key (digits)</span><input type="text" id="p-key" value="314" maxlength="8" inputmode="numeric" autocomplete="off"></label>
+        <div class="seg" role="group" aria-label="Direction"><button type="button" id="p-enc" aria-pressed="true">Encrypt</button><button type="button" id="p-dec" aria-pressed="false">Decrypt</button></div>
+      </div>
+      <div class="tbl"><table class="steps" id="p-table"><tbody></tbody></table></div>
+      <div class="result"><span class="label" id="p-out-label">Cipher text</span><span class="out" id="p-out"></span></div>
+      <p class="note"><b>Look closely</b>With key 314, the two Ls in POLYALPHABETIC both become P, but the two As become B and E. The same letter no longer always turns into the same cipher letter. That is what makes this harder to break than a Caesar cipher. The default example matches the case study on page 285.</p>
+    </div>
+  </section>
+
+  <!-- ===== 3 Vigenère ===== -->
+  <section class="station" id="vigenere">
+    <div class="sec-head"><span class="sec-badge">3</span><h2 class="sec-title">Vigenère cipher <small>p. 285</small></h2></div>
+    <p class="intro">The <span class="term">Vigenère cipher</span> is a polyalphabetic cipher whose key is a word. Each key letter gives a shift equal to its position in the alphabet, counting A as 0, so P = 15, I = 8 and E = 4. The keyword repeats under the whole message.</p>
+    <div class="panel">
+      <div class="controls">
+        <label class="field"><span>Message</span><input type="text" id="v-text" value="POLYALPHABETIC" maxlength="30" autocomplete="off" spellcheck="false"></label>
+        <label class="field narrow"><span>Keyword</span><input type="text" id="v-key" value="PIE" maxlength="12" autocomplete="off" spellcheck="false"></label>
+        <div class="seg" role="group" aria-label="Direction"><button type="button" id="v-enc" aria-pressed="true">Encrypt</button><button type="button" id="v-dec" aria-pressed="false">Decrypt</button></div>
+      </div>
+      <div class="tbl"><table class="steps" id="v-table"><tbody></tbody></table></div>
+      <div class="result"><span class="label" id="v-out-label">Cipher text</span><span class="out" id="v-out"></span></div>
+      <details class="more" id="v-square-box">
+        <summary>Show the Vigenère square</summary>
+        <p class="intro" style="margin-bottom:10px">Before computers, people used this square. Find the key letter's row and the message letter's column: the cipher letter is where they meet. Click any letter in the table above to see it on the square.</p>
+        <div class="square-wrap"><table class="square" id="v-square"></table></div>
+      </details>
+    </div>
+    <div class="challenge" id="ch2">
+      <p class="label">Challenge</p>
+      <p>Decrypt this message. The keyword is <b>LEMON</b>. Use Decrypt mode above, or work it out on paper first.</p>
+      <p class="ct">LXFOPV EF RNHR</p>
+      <div class="row"><input type="text" id="ch2-in" aria-label="Your answer" autocomplete="off" spellcheck="false"><button class="btn" type="button" id="ch2-go">Check</button></div>
+      <p class="fb" id="ch2-fb" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <!-- ===== 4 Frequency analysis ===== -->
+  <section class="station" id="frequency">
+    <div class="sec-head"><span class="sec-badge">4</span><h2 class="sec-title">Breaking ciphers with frequency analysis</h2></div>
+    <p class="intro">In English, some letters turn up far more than others. E is the most common, then T and A. <span class="term">Frequency analysis</span> counts the letters in a cipher text and matches the common ones to E, T and A. Compare the three charts below: each bar is how often that letter appears.</p>
+    <div class="panel">
+      <label class="field"><span>Text to encrypt (change it if you like)</span><textarea id="f-text" spellcheck="false">Every device that connects to the internet must be protected. A network administrator sets passwords, applies software updates and checks the firewall. When staff send data between offices, the data should be encrypted so that an attacker who intercepts it cannot read it. Encryption keeps the information secret, but only when the key is kept secret as well.</textarea></label>
+      <div class="controls">
+        <div class="field narrow"><span>Caesar shift</span><div class="range-row"><input type="range" id="f-shift" min="1" max="25" value="7" aria-label="Caesar shift"><output id="f-shift-out">7</output></div></div>
+        <label class="field narrow"><span>Vigenère keyword</span><input type="text" id="f-key" value="FOOTSCRAY" maxlength="12" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <div class="freq-grid" id="f-charts"></div>
+      <p class="note"><b>What to notice</b>The Caesar chart is the plain text chart slid sideways. Its peaks keep their shape, so finding the tallest bar usually gives away the shift. The Vigenère chart is much flatter, because each letter is shifted by several different amounts. Its peaks are hidden, so this simple attack fails.</p>
+    </div>
+  </section>
+
+  <!-- ===== 5 Symmetric ===== -->
+  <section class="station" id="symmetric">
+    <div class="sec-head"><span class="sec-badge">5</span><h2 class="sec-title">Symmetric encryption <small>p. 286</small></h2></div>
+    <p class="intro">Every cipher so far is <span class="term">symmetric</span>: the sender and the receiver use the <b>same secret key</b>, one to lock (encrypt) and one to unlock (decrypt). Alice sends Bob a message across the internet. Eve can see everything that travels across the internet.</p>
+    <div class="flow">
+      <div class="party">
+        <h3><span class="av a">A</span>Alice <span class="who">sender</span></h3>
+        <label class="field"><span>Message</span><input type="text" id="s-msg" value="MEET ME AT THE LIBRARY" maxlength="40" autocomplete="off" spellcheck="false"></label>
+        <label class="field"><span>Secret key</span><input type="text" id="s-key" value="NETWORK" maxlength="16" autocomplete="off" spellcheck="false"></label>
+        <span class="arrowline">Encrypts with the secret key →</span>
+      </div>
+      <div class="party net eve">
+        <h3><span class="av e">E</span>The internet <span class="who">Eve is watching</span></h3>
+        <span class="label">What Eve sees</span>
+        <div class="wire mono" id="s-wire"></div>
+        <div id="s-eve"></div>
+      </div>
+      <div class="party">
+        <h3><span class="av b">B</span>Bob <span class="who">receiver</span></h3>
+        <label class="field"><span>Bob's copy of the key</span><input type="text" id="s-bobkey" value="NETWORK" maxlength="16" autocomplete="off" spellcheck="false"></label>
+        <span class="label">Bob decrypts</span>
+        <div class="wire mono" id="s-bob"></div>
+        <span id="s-status"></span>
+      </div>
+    </div>
+    <div class="panel">
+      <p class="label">The big problem: sharing the key</p>
+      <p class="intro">Bob only gets the message if he has exactly the same key. Change one letter of Bob's key above and see what happens. So how does Alice get the key to Bob? If she sends it across the internet, Eve sees that too.</p>
+      <div class="controls"><button class="btn danger" type="button" id="s-leak">Send the key to Bob over the internet</button></div>
+      <p class="note"><b>Real symmetric encryption</b>Here the algorithm is Vigenère so you can follow every step. Real systems use <b>AES</b>. It mixes the data with a 128, 192 or 256-bit key through 10, 12 or 14 rounds of substituting bytes, shifting rows, mixing columns and adding the key. Your key above has <span id="s-space"></span>. A 128-bit AES key has 2<sup>128</sup>, about 340 undecillion (3.4 × 10<sup>38</sup>). AES is fast and strong, but it still has the key-sharing problem. Asymmetric encryption solves that.</p>
+    </div>
+  </section>
+
+  <!-- ===== 6 Asymmetric ===== -->
+  <section class="station" id="asymmetric">
+    <div class="sec-head"><span class="sec-badge">6</span><h2 class="sec-title">Asymmetric encryption with RSA <small>p. 287</small></h2></div>
+    <p class="intro"><span class="term">Asymmetric</span> encryption uses <b>two related keys</b>. Bob's <span class="key public">public key</span> can be given to anyone, and it can only lock. His <span class="key secret">private key</span> never leaves his device, and it is the only key that can unlock. Alice never needs a secret from Bob, so there is nothing for Eve to steal on the way.</p>
+    <p class="intro">This is a working model of <span class="term">RSA</span> with tiny numbers so you can see the maths. Each letter is turned into a number first: A = 10, B = 11 … Z = 35. Starting at 10 stops any letter from being 0 or 1, which RSA cannot hide.</p>
+
+    <div class="panel">
+      <p class="label">Step 1 · Bob makes his key pair</p>
+      <div class="controls">
+        <label class="field narrow"><span>Prime p</span><select id="r-p"></select></label>
+        <label class="field narrow"><span>Prime q</span><select id="r-q"></select></label>
+      </div>
+      <div class="maths" id="r-maths"></div>
+      <div class="keys2">
+        <div class="keycard public"><span class="key public">Public key · share with everyone</span><span class="big" id="r-pub"></span><span style="font-size:14px">Used to <b>encrypt</b>: c = m<sup>e</sup> mod n</span></div>
+        <div class="keycard private"><span class="key secret">Private key · Bob keeps this</span><span class="big" id="r-priv"></span><span style="font-size:14px">Used to <b>decrypt</b>: m = c<sup>d</sup> mod n</span></div>
+      </div>
+      <p class="intro" style="font-size:14px;color:var(--muted)">"mod n" means divide by n and keep the remainder. Bob throws p and q away once the keys are made, because anyone who knows them can work out d.</p>
+    </div>
+
+    <div class="flow">
+      <div class="party">
+        <h3><span class="av a">A</span>Alice <span class="who">has Bob's public key</span></h3>
+        <label class="field"><span>Message</span><input type="text" id="r-msg" value="HI BOB" maxlength="16" autocomplete="off" spellcheck="false"></label>
+        <span class="key public" id="r-alice-key"></span>
+        <div class="tbl"><table class="steps" id="r-enc"><tbody></tbody></table></div>
+      </div>
+      <div class="party net eve">
+        <h3><span class="av e">E</span>The internet <span class="who">Eve is watching</span></h3>
+        <span class="label">What Eve sees</span>
+        <div class="wire mono" id="r-wire"></div>
+        <span class="key public" id="r-eve-key"></span>
+        <span class="label">Eve tries to decrypt with the public key</span>
+        <div class="wire mono" id="r-eve-try"></div>
+        <span class="status bad">Doesn't work: the public key only locks</span>
+      </div>
+      <div class="party">
+        <h3><span class="av b">B</span>Bob <span class="who">has his private key</span></h3>
+        <span class="key secret" id="r-bob-key"></span>
+        <div class="tbl"><table class="steps" id="r-dec"><tbody></tbody></table></div>
+        <div class="wire mono" id="r-bob-out"></div>
+        <span class="status ok">Decrypted</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <p class="label">Can Eve work out the private key?</p>
+      <p class="intro">Eve knows n. If she can find the two primes that multiply to make n, she can rebuild Bob's private key. With numbers this small, a computer does it instantly.</p>
+      <div class="controls"><button class="btn danger" type="button" id="r-crack">Let Eve try to factor n</button></div>
+      <div id="r-crack-out" class="maths" hidden></div>
+      <p class="note"><b>Why real RSA is safe</b>Real RSA keys use an n that is 2048 bits long: a number with about 617 digits. There is no known shortcut for finding its two primes, and trying them would take ordinary computers far longer than the age of the universe. This toy version has two other weaknesses that real RSA removes: the same letter always gives the same number, so frequency analysis works on it, and there are only a handful of possible keys.</p>
+    </div>
+
+    <div class="panel">
+      <p class="label">Digital signatures: running it backwards</p>
+      <p class="intro">RSA can also prove who sent a message. Bob <b>signs</b> with his private key, and anyone can <b>verify</b> with his public key. If the message is changed on the way, the check fails. ECDSA does the same job using elliptic curves, which give the same security with much smaller keys.</p>
+      <div class="controls">
+        <label class="field"><span>Bob's reply</span><input type="text" id="g-msg" value="SEE YOU AT TEN" maxlength="16" autocomplete="off" spellcheck="false"></label>
+        <button class="btn danger" type="button" id="g-tamper">Eve changes one number</button>
+      </div>
+      <div class="tbl"><table class="steps" id="g-table"><tbody></tbody></table></div>
+      <span id="g-status"></span>
+    </div>
+  </section>
+
+  <!-- ===== 7 Compare ===== -->
+  <section class="station" id="compare">
+    <div class="sec-head"><span class="sec-badge">7</span><h2 class="sec-title">Symmetric and asymmetric compared</h2></div>
+    <div class="tbl"><table class="cmp">
+      <thead><tr><th></th><th>Symmetric</th><th>Asymmetric</th></tr></thead>
+      <tbody>
+        <tr><th>Keys</th><td>One secret (private) key, shared by sender and receiver</td><td>A key pair: a public key to encrypt and a private key to decrypt</td></tr>
+        <tr><th>Sharing the key</th><td>The key has to reach the receiver without anyone else seeing it</td><td>The public key can be sent openly. The private key never leaves its owner</td></tr>
+        <tr><th>Speed</th><td>Fast, so it suits large amounts of data</td><td>Much slower, so it suits small pieces of data such as keys and signatures</td></tr>
+        <tr><th>Methods in this course</th><td>AES; also Caesar, polyalphabetic and Vigenère</td><td>RSA, ECDH (agreeing a shared key), ECDSA (signatures)</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note"><b>In real life, both work together</b>When you open a secure (https) website, your browser and the server first use asymmetric maths such as ECDH to agree on a fresh secret key, with nothing secret sent across the internet. They then switch to fast symmetric AES, using that key, for the rest of the visit.</p>
+  </section>
+
+  <!-- ===== 8 Quiz ===== -->
+  <section class="station" id="quiz">
+    <div class="sec-head"><span class="sec-badge">8</span><h2 class="sec-title">Check yourself</h2></div>
+    <p class="score" aria-live="polite"><b id="qz-score">0</b> / <span id="qz-total"></span> correct</p>
+    <div class="quiz" id="qz"></div>
+    <div><button class="btn ghost" type="button" id="qz-reset">Start the questions again</button></div>
+  </section>
+
+  <footer>
+    <p>Built for <i>Applied Computing VCE Units 1&amp;2</i>, Chapter 7, pages 283 to 287. The RSA station uses tiny numbers to show how the maths works. Never use toy keys like these to protect real data.</p>
+  </footer>
+</div>
+
+<script>
+(function () {
+const $ = function (id) { return document.getElementById(id); };
+const AB = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const mod = function (a, n) { return ((a % n) + n) % n; };
+const up = function (s) { return String(s || "").toUpperCase(); };
+const lettersOnly = function (s) { return up(s).replace(/[^A-Z]/g, ""); };
+function shiftChar(c, k) { return AB[mod(AB.indexOf(c) + k, 26)]; }
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+function pressed(on, off) { on.setAttribute("aria-pressed", "true"); off.setAttribute("aria-pressed", "false"); }
+
+/* Shift every letter by a repeating list of shifts. Non-letters pass through and do not use up a key position. */
+function polyRun(text, shifts, dir) {
+  const steps = []; let i = 0;
+  const out = up(text).replace(/[A-Z]/g, function (c) {
+    const s = shifts[i % shifts.length]; const r = shiftChar(c, dir * s);
+    steps.push({ p: c, s: s, c: r, i: i }); i++; return r;
+  });
+  return { out: out, steps: steps };
+}
+function vigShifts(key) { const k = lettersOnly(key); return k ? k.split("").map(function (c) { return AB.indexOf(c); }) : [0]; }
+function vig(text, key, dir) { return polyRun(text, vigShifts(key), dir).out; }
+
+/* English letter frequencies (%), A–Z */
+const EN = [8.2,1.5,2.8,4.3,12.7,2.2,2.0,6.1,7.0,0.15,0.77,4.0,2.4,6.7,7.5,1.9,0.095,6.0,6.3,9.1,2.8,0.98,2.4,0.15,2.0,0.074];
+function counts(text) { const c = new Array(26).fill(0); lettersOnly(text).split("").forEach(function (ch) { c[AB.indexOf(ch)]++; }); return c; }
+function chi(text) {
+  const c = counts(text), n = c.reduce(function (a, b) { return a + b; }, 0) || 1;
+  return c.reduce(function (s, x, i) { const e = EN[i] / 100 * n; return s + (x - e) * (x - e) / e; }, 0);
+}
+
+/* Header flourish: the subtitle is "CIPHER LAB" in Caesar shift 3. */
+$("h1-scramble").textContent = vig("CIPHER LAB", "D", 1);
+
+/* ===== 1 Caesar ===== */
+let cDir = 1;
+function caesar() {
+  const k = Number($("c-shift").value);
+  $("c-shift-out").textContent = k;
+  const txt = up($("c-text").value);
+  const out = txt.replace(/[A-Z]/g, function (c) { return shiftChar(c, cDir * k); });
+  $("c-out").textContent = out || " ";
+  $("c-out-label").textContent = cDir === 1 ? "Cipher text" : "Plain text";
+  const used = new Set(lettersOnly(txt).split(""));
+  let html = '<div class="rl">' + (cDir === 1 ? "Plain" : "Cipher") + "</div>";
+  for (let i = 0; i < 26; i++) html += '<div class="' + (used.has(AB[i]) ? "used" : "") + '">' + AB[i] + "</div>";
+  html += '<div class="rl arrow"></div>';
+  for (let i = 0; i < 26; i++) html += '<div class="arrow">↓</div>';
+  html += '<div class="rl">' + (cDir === 1 ? "Cipher" : "Plain") + "</div>";
+  for (let i = 0; i < 26; i++) { const c = shiftChar(AB[i], cDir * k); html += '<div class="' + (used.has(AB[i]) ? "used" : "") + '">' + c + "</div>"; }
+  $("c-strip").innerHTML = html;
+}
+$("c-text").addEventListener("input", caesar);
+$("c-shift").addEventListener("input", caesar);
+$("c-enc").addEventListener("click", function () { cDir = 1; pressed($("c-enc"), $("c-dec")); caesar(); });
+$("c-dec").addEventListener("click", function () { cDir = -1; pressed($("c-dec"), $("c-enc")); caesar(); });
+$("c-rot13").addEventListener("click", function () { $("c-shift").value = 13; caesar(); });
+caesar();
+
+function brute() {
+  const txt = up($("b-text").value);
+  const rows = []; let best = 0, bestScore = Infinity;
+  for (let k = 1; k <= 25; k++) {
+    const p = txt.replace(/[A-Z]/g, function (c) { return shiftChar(c, -k); });
+    const sc = chi(p); if (sc < bestScore) { bestScore = sc; best = k; }
+    rows.push([k, p]);
+  }
+  $("b-list").innerHTML = lettersOnly(txt) ? rows.map(function (r) {
+    return '<li class="' + (r[0] === best ? "best" : "") + '"><span>' + r[0] + "</span><span>" + esc(r[1]) + "</span></li>";
+  }).join("") : "<li>Type some cipher text above.</li>";
+}
+$("b-text").addEventListener("input", brute);
+brute();
+
+function challenge(n, answer, ok, no) {
+  function check() {
+    const right = lettersOnly($("ch" + n + "-in").value) === answer;
+    const fb = $("ch" + n + "-fb");
+    fb.className = "fb " + (right ? "ok" : "no");
+    fb.textContent = right ? ok : no;
+  }
+  $("ch" + n + "-go").addEventListener("click", check);
+  $("ch" + n + "-in").addEventListener("keydown", function (e) { if (e.key === "Enter") check(); });
+}
+challenge(1, "MEETATNOON", "Correct: MEET AT NOON, using a shift of 7.", "Not yet. Paste the cipher text into the brute-force box and look for the row that reads as English.");
+challenge(2, "ATTACKATDAWN", "Correct: ATTACK AT DAWN.", "Not yet. Put LXFOPV EF RNHR in the Vigenère message box, LEMON as the keyword, and choose Decrypt.");
+
+/* ===== Step tables ===== */
+function stepTable(tbody, steps, rows) {
+  tbody.innerHTML = rows.map(function (r) {
+    return '<tr class="' + (r.cls || "") + '"><th>' + r.label + "</th>" + steps.map(function (s, i) {
+      return '<td data-i="' + i + '"' + (r.click ? ' class="click"' : "") + ">" + r.f(s) + "</td>";
+    }).join("") + "</tr>";
+  }).join("");
+}
+
+/* Same data, one row per letter: fits the narrow Alice/Bob columns. */
+function stepTableV(table, steps, cols) {
+  table.classList.add("vert");
+  table.tHead && table.tHead.remove();
+  const th = table.createTHead();
+  th.innerHTML = "<tr>" + cols.map(function (c) { return "<th>" + c.label + "</th>"; }).join("") + "</tr>";
+  table.tBodies[0].innerHTML = steps.map(function (s) {
+    return "<tr>" + cols.map(function (c) { return '<td class="' + (c.cls || "") + '">' + c.f(s) + "</td>"; }).join("") + "</tr>";
+  }).join("");
+}
+
+/* ===== 2 Polyalphabetic ===== */
+let pDir = 1;
+function poly() {
+  const digits = ($("p-key").value || "").replace(/[^0-9]/g, "");
+  const shifts = digits ? digits.split("").map(Number) : [0];
+  const r = polyRun($("p-text").value, shifts, pDir);
+  stepTable($("p-table").tBodies[0], r.steps, [
+    { label: pDir === 1 ? "Plain text" : "Cipher text", f: function (s) { return s.p; } },
+    { label: "Shift", cls: "k", f: function (s) { return (pDir === 1 ? "+" : "−") + s.s; } },
+    { label: pDir === 1 ? "Cipher text" : "Plain text", cls: "o", f: function (s) { return s.c; } }
+  ]);
+  $("p-out").textContent = r.out || " ";
+  $("p-out-label").textContent = pDir === 1 ? "Cipher text" : "Plain text";
+}
+["p-text", "p-key"].forEach(function (id) { $(id).addEventListener("input", poly); });
+$("p-enc").addEventListener("click", function () { pDir = 1; pressed($("p-enc"), $("p-dec")); poly(); });
+$("p-dec").addEventListener("click", function () { pDir = -1; pressed($("p-dec"), $("p-enc")); poly(); });
+poly();
+
+/* ===== 3 Vigenère ===== */
+let vDir = 1, vSel = 0, vSteps = [];
+(function buildSquare() {
+  let h = "<thead><tr><th></th>" + AB.split("").map(function (c) { return "<th>" + c + "</th>"; }).join("") + "</tr></thead><tbody>";
+  for (let r = 0; r < 26; r++) {
+    h += "<tr><th>" + AB[r] + "</th>";
+    for (let c = 0; c < 26; c++) h += '<td data-r="' + r + '" data-c="' + c + '">' + AB[(r + c) % 26] + "</td>";
+    h += "</tr>";
+  }
+  $("v-square").innerHTML = h + "</tbody>";
+})();
+function paintSquare() {
+  const s = vSteps[vSel];
+  const cells = $("v-square").querySelectorAll("td");
+  cells.forEach(function (td) { td.className = ""; });
+  document.querySelectorAll("#v-table td").forEach(function (td) { td.classList.toggle("sel", Number(td.dataset.i) === vSel); });
+  if (!s) return;
+  const row = s.s, col = AB.indexOf(vDir === 1 ? s.p : s.c);
+  cells.forEach(function (td) {
+    const r = Number(td.dataset.r), c = Number(td.dataset.c);
+    if (r === row && c === col) td.className = "hit";
+    else if (r === row && c < col) td.className = "hr";
+    else if (c === col && r < row) td.className = "hc";
+  });
+}
+function vigenere() {
+  const r = polyRun($("v-text").value, vigShifts($("v-key").value), vDir);
+  vSteps = r.steps; if (vSel >= vSteps.length) vSel = 0;
+  stepTable($("v-table").tBodies[0], r.steps, [
+    { label: vDir === 1 ? "Plain text" : "Cipher text", f: function (s) { return s.p; }, click: true },
+    { label: "Key letter", cls: "k", f: function (s) { return AB[s.s]; }, click: true },
+    { label: "Shift", cls: "n", f: function (s) { return (vDir === 1 ? "+" : "−") + s.s; }, click: true },
+    { label: vDir === 1 ? "Cipher text" : "Plain text", cls: "o", f: function (s) { return s.c; }, click: true }
+  ]);
+  $("v-out").textContent = r.out || " ";
+  $("v-out-label").textContent = vDir === 1 ? "Cipher text" : "Plain text";
+  paintSquare();
+}
+$("v-table").addEventListener("click", function (e) {
+  const td = e.target.closest("td"); if (!td) return;
+  vSel = Number(td.dataset.i); $("v-square-box").open = true; paintSquare();
+});
+["v-text", "v-key"].forEach(function (id) { $(id).addEventListener("input", vigenere); });
+$("v-enc").addEventListener("click", function () { vDir = 1; pressed($("v-enc"), $("v-dec")); vigenere(); });
+$("v-dec").addEventListener("click", function () { vDir = -1; pressed($("v-dec"), $("v-enc")); vigenere(); });
+vigenere();
+
+/* ===== 4 Frequency analysis ===== */
+function freq() {
+  const k = Number($("f-shift").value); $("f-shift-out").textContent = k;
+  const plain = up($("f-text").value);
+  const caes = plain.replace(/[A-Z]/g, function (c) { return shiftChar(c, k); });
+  const vg = vig(plain, $("f-key").value, 1);
+  const sets = [
+    { name: "Plain text", sub: "English as written", c: counts(plain), cls: "plain" },
+    { name: "Caesar cipher", sub: "shift " + k, c: counts(caes), cls: "", caesar: true },
+    { name: "Vigenère cipher", sub: "keyword " + (lettersOnly($("f-key").value) || "(none)"), c: counts(vg), cls: "" }
+  ];
+  const total = sets[0].c.reduce(function (a, b) { return a + b; }, 0) || 1;
+  const maxPct = Math.max.apply(null, sets.map(function (s) { return Math.max.apply(null, s.c); })) / total * 100 || 1;
+  const letters = '<div class="letters" aria-hidden="true">' + AB.split("").map(function (c) { return "<span>" + c + "</span>"; }).join("") + "</div>";
+  $("f-charts").innerHTML = sets.map(function (s) {
+    const top = s.c.indexOf(Math.max.apply(null, s.c));
+    const bars = s.c.map(function (x, i) {
+      const pct = x / total * 100;
+      return '<span class="' + (i === top ? "top" : "") + '" style="height:' + (pct / maxPct * 100).toFixed(1) + '%" title="' + AB[i] + ": " + pct.toFixed(1) + '%"></span>';
+    }).join("");
+    let verdict = "Most common letter: <b>" + AB[top] + "</b>.";
+    if (s.caesar) {
+      const guess = mod(top - 4, 26);
+      verdict += " If " + AB[top] + " stands for E, the shift is " + AB[top] + " − E = <b>" + guess + "</b>. " +
+        (guess === k ? '<span class="status bad">Shift found: the cipher is broken</span>' : '<span class="status ok">Guess was wrong this time, but trying the next most common letters soon finds it</span>');
+    }
+    if (!s.caesar && s.cls !== "plain") {
+      const sorted = s.c.slice().sort(function (a, b) { return b - a; });
+      verdict += " The top three letters are only " + (sorted[0] / total * 100).toFixed(1) + "%, " + (sorted[1] / total * 100).toFixed(1) + "% and " + (sorted[2] / total * 100).toFixed(1) + "% of the text, so no letter clearly stands for E.";
+    }
+    return '<div class="chart"><div class="chart-head"><h3>' + s.name + "</h3><p>" + esc(s.sub) + '</p></div><div class="chart-scroll"><div class="bars ' + s.cls + '" role="img" aria-label="Letter frequency chart for ' + s.name + '">' + bars + "</div>" + letters + '</div><p class="verdict">' + verdict + "</p></div>";
+  }).join("");
+}
+["f-text", "f-key", "f-shift"].forEach(function (id) { $(id).addEventListener("input", freq); });
+freq();
+
+/* ===== 5 Symmetric ===== */
+let leaked = false;
+function symmetric() {
+  const msg = $("s-msg").value, key = $("s-key").value, bobKey = $("s-bobkey").value;
+  const ct = vig(msg, key, 1);
+  $("s-wire").textContent = ct || " ";
+  const bob = vig(ct, bobKey, -1);
+  $("s-bob").textContent = bob || " ";
+  const match = lettersOnly(key) === lettersOnly(bobKey) && lettersOnly(key) !== "";
+  $("s-status").innerHTML = match ? '<span class="status ok">Same key: Bob reads the message</span>' : '<span class="status bad">Different key: Bob gets nonsense</span>';
+  if (leaked) {
+    $("s-eve").innerHTML = '<span class="label">Eve also saw the key</span><span class="key secret">' + esc(up(key)) + '</span><span class="label">So Eve decrypts</span><div class="wire mono">' + esc(vig(ct, key, -1)) + '</div><span class="status bad">Eve can read everything</span>';
+  } else {
+    $("s-eve").innerHTML = '<span class="label">Eve does not have the key</span><p style="font-size:14px">The cipher text is all she gets.</p>';
+  }
+  const L = lettersOnly(key).length;
+  $("s-space").innerHTML = L
+    ? L + " letters, so there are 26<sup>" + L + "</sup> = " + (BigInt(26) ** BigInt(L)).toLocaleString("en-AU") + " possible keys"
+    : "no letters yet";
+}
+["s-msg", "s-key", "s-bobkey"].forEach(function (id) { $(id).addEventListener("input", symmetric); });
+$("s-leak").addEventListener("click", function () {
+  leaked = !leaked;
+  $("s-leak").textContent = leaked ? "Undo: keep the key off the internet" : "Send the key to Bob over the internet";
+  $("s-leak").className = leaked ? "btn ghost" : "btn danger";
+  symmetric();
+});
+symmetric();
+
+/* ===== 6 Asymmetric (toy RSA) ===== */
+const PRIMES = [7, 11, 13, 17, 19, 23, 29, 31];
+function gcd(a, b) { while (b) { const t = b; b = a % b; a = t; } return a; }
+function inv(e, m) { let t = 0, nt = 1, r = m, nr = e; while (nr) { const q = Math.floor(r / nr); [t, nt] = [nt, t - q * nt]; [r, nr] = [nr, r - q * nr]; } return mod(t, m); }
+function powmod(b, e, n) { let r = 1; b = b % n; while (e > 0) { if (e & 1) r = (r * b) % n; b = (b * b) % n; e >>= 1; } return r; }
+const toNum = function (c) { return AB.indexOf(c) + 10; };
+const toChar = function (m) { return m >= 10 && m <= 35 ? AB[m - 10] : "?"; };
+PRIMES.forEach(function (p) { $("r-p").add(new Option(p, p)); $("r-q").add(new Option(p, p)); });
+$("r-p").value = 11; $("r-q").value = 13;
+let K = null, tampered = false;
+
+function makeKeys() {
+  let p = Number($("r-p").value), q = Number($("r-q").value);
+  if (p === q) {
+    $("r-maths").innerHTML = '<span class="status bad">p and q must be two different primes. Pick another one.</span>';
+    return null;
+  }
+  const n = p * q, phi = (p - 1) * (q - 1);
+  let e = 3, d = 0;
+  for (; e < phi; e += 2) { if (gcd(e, phi) === 1) { d = inv(e, phi); if (d !== e) break; } }
+  $("r-maths").innerHTML =
+    "n = p × q = " + p + " × " + q + " = <b>" + n + "</b><br>" +
+    "φ = (p − 1) × (q − 1) = " + (p - 1) + " × " + (q - 1) + " = " + phi + "<br>" +
+    "e = <b>" + e + "</b> &nbsp;(a number that shares no factors with " + phi + ")<br>" +
+    "d = <b>" + d + "</b> &nbsp;(because " + e + " × " + d + " = " + (e * d) + ", which is 1 more than a multiple of " + phi + ")";
+  return { p: p, q: q, n: n, phi: phi, e: e, d: d };
+}
+
+function rsa() {
+  K = makeKeys();
+  $("r-crack-out").hidden = true;
+  const blocks = ["r-pub", "r-priv", "r-alice-key", "r-eve-key", "r-bob-key", "r-wire", "r-eve-try", "r-bob-out"];
+  if (!K) { blocks.forEach(function (id) { $(id).textContent = "–"; }); ["r-enc", "r-dec", "g-table"].forEach(function (id) { $(id).tBodies[0].innerHTML = ""; }); $("g-status").innerHTML = ""; return; }
+  const pub = "(e " + K.e + ", n " + K.n + ")", priv = "(d " + K.d + ", n " + K.n + ")";
+  $("r-pub").textContent = pub; $("r-priv").textContent = priv;
+  $("r-alice-key").textContent = "Bob's public key " + pub;
+  $("r-eve-key").textContent = "Bob's public key " + pub + " is public too";
+  $("r-bob-key").textContent = "Private key " + priv;
+
+  const L = lettersOnly($("r-msg").value).split("").filter(Boolean);
+  const enc = L.map(function (c) { const m = toNum(c); return { c: c, m: m, x: powmod(m, K.e, K.n) }; });
+  stepTableV($("r-enc"), enc, [
+    { label: "Letter", f: function (s) { return s.c; } },
+    { label: "m", cls: "n", f: function (s) { return s.m; } },
+    { label: "m<sup>" + K.e + "</sup> mod " + K.n, cls: "o", f: function (s) { return s.x; } }
+  ]);
+  $("r-wire").textContent = enc.map(function (s) { return s.x; }).join(" ") || "–";
+  $("r-eve-try").textContent = enc.map(function (s) { const y = powmod(s.x, K.e, K.n); return y; }).join(" ") || "–";
+  const dec = enc.map(function (s) { const m = powmod(s.x, K.d, K.n); return { x: s.x, m: m, c: toChar(m) }; });
+  stepTableV($("r-dec"), dec, [
+    { label: "c", f: function (s) { return s.x; } },
+    { label: "c<sup>" + K.d + "</sup> mod " + K.n, cls: "n", f: function (s) { return s.m; } },
+    { label: "Letter", cls: "o", f: function (s) { return s.c; } }
+  ]);
+  $("r-bob-out").textContent = dec.map(function (s) { return s.c; }).join("") || "–";
+  sign();
+}
+
+function sign() {
+  if (!K) return;
+  const L = lettersOnly($("g-msg").value).split("").filter(Boolean);
+  const rows = L.map(function (c, i) {
+    const m = toNum(c); let s = powmod(m, K.d, K.n);
+    if (tampered && i === 0) s = mod(s + 1, K.n);
+    const v = powmod(s, K.e, K.n);
+    return { c: c, m: m, s: s, v: v, ok: v === m };
+  });
+  stepTable($("g-table").tBodies[0], rows, [
+    { label: "Letter", f: function (r) { return r.c; } },
+    { label: "m", cls: "n", f: function (r) { return r.m; } },
+    { label: "Signature m^" + K.d + " mod " + K.n + " (private)", cls: "k", f: function (r) { return r.s; } },
+    { label: "Check s^" + K.e + " mod " + K.n + " (public)", cls: "o", f: function (r) { return r.ok ? r.v : '<span style="color:var(--coral)">' + r.v + "</span>"; } }
+  ]);
+  const good = rows.length && rows.every(function (r) { return r.ok; });
+  $("g-status").innerHTML = !rows.length ? "" : good
+    ? '<span class="status ok">Valid: every check matches m, so Bob sent this and it was not changed</span>'
+    : '<span class="status bad">Not valid: a check does not match m, so the message or signature was changed</span>';
+}
+
+$("r-p").addEventListener("change", rsa);
+$("r-q").addEventListener("change", rsa);
+$("r-msg").addEventListener("input", rsa);
+$("g-msg").addEventListener("input", sign);
+$("g-tamper").addEventListener("click", function () {
+  tampered = !tampered;
+  $("g-tamper").textContent = tampered ? "Undo Eve's change" : "Eve changes one number";
+  $("g-tamper").className = tampered ? "btn ghost" : "btn danger";
+  sign();
+});
+$("r-crack").addEventListener("click", function () {
+  if (!K) return;
+  let f = 2; while (K.n % f) f++;
+  const p = f, q = K.n / f, phi = (p - 1) * (q - 1), d = inv(K.e, phi);
+  const ct = $("r-wire").textContent.split(" ").map(Number).filter(function (x) { return !isNaN(x); });
+  $("r-crack-out").innerHTML =
+    "Trying 2, 3, 5, 7 … " + K.n + " ÷ " + p + " = " + q + " &nbsp;→ found p = <b>" + p + "</b>, q = <b>" + q + "</b><br>" +
+    "φ = " + (p - 1) + " × " + (q - 1) + " = " + phi + " &nbsp;→ d = <b>" + d + "</b><br>" +
+    "Eve decrypts: <b>" + ct.map(function (x) { return toChar(powmod(x, d, K.n)); }).join("") + "</b> &nbsp;(" + (p - 1) + " divisions, well under a millisecond)";
+  $("r-crack-out").hidden = false;
+});
+rsa();
+
+/* ===== 8 Quiz ===== */
+const QZ = [
+  ["Using a Caesar cipher with a shift of 3, what does the letter X become?", ["A", "U", "Z", "C"], 0, "X → Y → Z → A. After Z, the count loops back to A."],
+  ["Why is a Vigenère cipher harder to break than a Caesar cipher?", ["It only works on short messages", "The same plain letter can turn into different cipher letters", "It uses numbers instead of letters", "It needs a computer to encrypt"], 1, "Each letter is shifted by a different amount, so the letter frequencies are flattened and frequency analysis stops working."],
+  ["How many keys does an attacker need to try to brute-force a Caesar cipher?", ["26 × 26", "Millions", "25", "It cannot be brute-forced"], 2, "There are only 25 useful shifts (a shift of 26 gives back the original), so a brute-force attack is almost instant."],
+  ["In symmetric encryption, which key does the receiver use to decrypt?", ["The sender's public key", "Their own public key", "The same secret key the sender used", "No key is needed"], 2, "Symmetric means one shared secret key both encrypts and decrypts."],
+  ["Alice wants to send Bob a secret using asymmetric encryption. Which key does she encrypt with?", ["Bob's public key", "Bob's private key", "Alice's private key", "A key they agreed in person"], 0, "Anyone can lock with Bob's public key, but only Bob's private key can unlock it."],
+  ["Which of these is a symmetric encryption method?", ["RSA", "ECDH", "ECDSA", "AES"], 3, "AES uses the same secret key to encrypt and decrypt. RSA, ECDH and ECDSA are asymmetric."],
+  ["Bob signs a message with his private key. Who can check the signature?", ["Only Bob", "Anyone with Bob's public key", "Only the person he sent it to", "No one, it is secret"], 1, "Verifying uses the public key, so anyone can confirm the message came from Bob and was not changed."],
+  ["Eve broke the toy RSA key by factoring n. Why can't she do this to a real RSA key?", ["Real RSA does not use n", "Real keys are kept on paper", "Real n has about 617 digits, and finding its prime factors would take far too long", "Real RSA uses letters instead of numbers"], 2, "A 2048-bit n is far too large to factor with any known method in a useful amount of time."]
+];
+let qzRight = 0;
+$("qz-total").textContent = QZ.length;
+function renderQuiz() {
+  qzRight = 0; $("qz-score").textContent = 0;
+  $("qz").innerHTML = QZ.map(function (q, i) {
+    return '<div class="qq" data-i="' + i + '"><p class="qt">' + (i + 1) + ". " + esc(q[0]) + '</p><div class="opts">' +
+      q[1].map(function (o, j) { return '<button type="button" id="qz' + i + "-" + j + '" data-j="' + j + '">' + esc(o) + "</button>"; }).join("") +
+      '</div><p class="why" hidden></p></div>';
+  }).join("");
+}
+$("qz").addEventListener("click", function (e) {
+  const b = e.target.closest(".opts button"); if (!b || b.disabled) return;
+  const box = b.closest(".qq"), q = QZ[Number(box.dataset.i)], j = Number(b.dataset.j);
+  box.querySelectorAll(".opts button").forEach(function (x) {
+    x.disabled = true;
+    if (Number(x.dataset.j) === q[2]) x.classList.add("right");
+  });
+  if (j !== q[2]) b.classList.add("wrong"); else { qzRight++; $("qz-score").textContent = qzRight; }
+  const why = box.querySelector(".why"); why.textContent = (j === q[2] ? "Correct. " : "Not quite. ") + q[3]; why.hidden = false;
+});
+$("qz-reset").addEventListener("click", renderQuiz);
+renderQuiz();
+})();
+</script>
+</body>
+</html>
